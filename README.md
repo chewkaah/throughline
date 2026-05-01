@@ -1,11 +1,13 @@
-# Claude Skills: Diary + Recall
+# throughline
 
-Two Claude Code skills for keeping continuity across sessions:
+> Keep the thread across Claude Code sessions.
+
+Two complementary Claude Code skills:
 
 - **`diary`** — saves a past-tense session log to your Obsidian vault as either a project note or a dated session note.
 - **`recall`** — freezes full session context (decisions, open questions, files touched, resume instructions) so you can pause work in one session and resume it cold in another.
 
-The two are complementary: `diary` is your project history, `recall` is your handoff brief.
+`diary` is your project history. `recall` is your handoff brief. Together they keep the throughline of your work intact across every new context window.
 
 ---
 
@@ -36,12 +38,12 @@ If you use a different folder layout, edit the paths inside `diary/SKILL.md` to 
 
 ```bash
 # 1. Clone this repo somewhere temporary
-git clone https://github.com/chewkaah/claude-skills-diary-recall.git /tmp/claude-skills-diary-recall
+git clone https://github.com/chewkaah/throughline.git /tmp/throughline
 
 # 2. Copy the two skill folders into your global Claude skills directory
 mkdir -p ~/.claude/skills
-cp -R /tmp/claude-skills-diary-recall/diary  ~/.claude/skills/
-cp -R /tmp/claude-skills-diary-recall/recall ~/.claude/skills/
+cp -R /tmp/throughline/diary  ~/.claude/skills/
+cp -R /tmp/throughline/recall ~/.claude/skills/
 
 # 3. Edit ~/.claude/skills/diary/SKILL.md and replace every <VAULT_PATH>
 #    with the absolute path to your Obsidian vault root, e.g.
@@ -79,17 +81,17 @@ If you are a coding agent (Claude Code, etc.) installing this for a user, run th
 ### Step 2 — Fetch the skills
 
 ```bash
-git clone https://github.com/chewkaah/claude-skills-diary-recall.git /tmp/claude-skills-diary-recall
+git clone https://github.com/chewkaah/throughline.git /tmp/throughline
 ```
 
 ### Step 3 — Copy into the skills directory
 
 ```bash
 # recall is always installed
-cp -R /tmp/claude-skills-diary-recall/recall ~/.claude/skills/
+cp -R /tmp/throughline/recall ~/.claude/skills/
 
 # diary only if INSTALL_DIARY=true
-cp -R /tmp/claude-skills-diary-recall/diary ~/.claude/skills/
+cp -R /tmp/throughline/diary ~/.claude/skills/
 ```
 
 ### Step 4 — Substitute `<VAULT_PATH>` placeholders
