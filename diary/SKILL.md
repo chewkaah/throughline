@@ -7,16 +7,54 @@ description: Save or append a session log to the Obsidian daily session note. Tr
 
 Save a summary of the current session to your Obsidian vault.
 
-## Configuration
+## Vault Discovery
 
-Before using, edit the paths below to point at your own Obsidian vault.
+Do NOT assume or hardcode any vault path. Every time this skill runs, resolve the vault and folder paths fresh using the steps below.
 
+### Step D1 — Load or discover vault config
+
+Check for a cached config file at `~/.claude/throughline/config.md`. If it exists, read it and extract:
+- `vault`: absolute path to vault root
+- `sessions_dir`: path to the sessions folder (relative to vault, or absolute)
+- `projects_dir`: path to the projects folder (relative to vault, or absolute)
+
+If the config file does NOT exist (first run), discover the vault:
+
+```bash
+find ~ -maxdepth 6 -name ".obsidian" -type d 2>/dev/null
 ```
-Sessions:  <VAULT_PATH>/09-Sessions/
-Projects:  <VAULT_PATH>/08-Projects/
+
+- **Zero results**: Tell the user: "I couldn't find an Obsidian vault on your machine. What's the path to your vault root?" Use their answer as `vault`.
+- **One result**: Use its parent directory as `vault`. Confirm with the user before proceeding: "Found vault at `<path>` — is that right?"
+- **Multiple results**: List them and ask the user to pick one.
+
+Once `vault` is confirmed, discover the sessions and projects folders:
+
+```bash
+ls "<vault>"
 ```
 
-Replace `<VAULT_PATH>` with the absolute path to your Obsidian vault root (e.g. `/Users/yourname/Documents/Obsidian Vault` or an iCloud Drive path).
+Look for folders that look like session logs (names containing "session", "log", "journal", or numbered prefixes like `09-`). If none are obvious, ask the user: "Where do you keep session notes within your vault? (e.g. `09-Sessions` or `Journal`)"
+
+Do the same for a projects folder (names containing "project", "client", or numbered prefixes like `08-`). If none are obvious, ask: "Where do you keep project notes? (e.g. `08-Projects` or `Projects`)"
+
+Save the config for future runs:
+
+```bash
+mkdir -p ~/.claude/throughline
+```
+
+Write `~/.claude/throughline/config.md`:
+
+```markdown
+---
+vault: /absolute/path/to/vault
+sessions_dir: Sessions
+projects_dir: Projects
+---
+```
+
+---
 
 ## Instructions
 
@@ -37,7 +75,7 @@ If the user provided a description or title, use it. Otherwise, synthesise from 
 
 **Ask: is this work primarily on a named project?**
 
-A named project = a client, product, or codebase that has (or should have) a persistent reference document in `08-Projects/` — e.g. a specific client, product, or recurring initiative.
+A named project = a client, product, or codebase that has (or should have) a persistent reference document in the projects folder — e.g. a specific client, product, or recurring initiative.
 
 ```
 Is this work on a named project?
@@ -48,7 +86,7 @@ Is this work on a named project?
 **Project signals:**
 - Work touches a specific client or product codebase
 - Changes are feature/fix-level (not infrastructure or tooling)
-- There's already a project folder in `08-Projects/`
+- There's already a project folder in the projects dir
 - The user says "update the [project] docs/notes"
 
 **Session signals:**
@@ -63,11 +101,11 @@ Is this work on a named project?
 **Find or create the project document:**
 
 ```bash
-find "<VAULT_PATH>/08-Projects/" -name "*.md" | xargs grep -l "[project-name]" 2>/dev/null
+find "<vault>/<projects_dir>/" -name "*.md" | xargs grep -l "[project-name]" 2>/dev/null
 ```
 
 - **If a project doc exists** → append a dated progress section to it (see format below)
-- **If no project doc exists** → create one at `08-Projects/[Client-or-Org]/[Project-Name]/[Project-Name].md`
+- **If no project doc exists** → create one at `<vault>/<projects_dir>/[Client-or-Org]/[Project-Name]/[Project-Name].md`
 
 **Appending to an existing project doc — add under a `## Progress Log` heading:**
 
@@ -120,7 +158,7 @@ created: 'YYYY-MM-DD'
 **Check if a session note already exists for today:**
 
 ```bash
-ls "<VAULT_PATH>/09-Sessions/" | grep "$(date +%Y-%m-%d)"
+ls "<vault>/<sessions_dir>/" | grep "$(date +%Y-%m-%d)"
 ```
 
 - **If a file exists for today with the same topic slug** → append a new numbered section to it
@@ -175,7 +213,7 @@ After writing, tell the user:
 
 ## Rules
 
-- Always use the vault paths above — never create notes elsewhere
+- Always resolve vault paths via Step D1 — never assume or hardcode a path
 - Session file naming: `YYYY-MM-DD-[slug].md`
 - Keep bullets concise — this is a log, not a report
 - Tags should be lowercase, relevant to the work done

@@ -3,16 +3,40 @@ name: recall
 description: Capture or restore a full session-context snapshot so work can pause in one Claude Code session and resume cold in another. Use when the user says "recall save", "save recall", "freeze context" (save mode — captures TL;DR, where-we-are, locked decisions, open questions, files touched, external refs, related Obsidian session notes, and resume instructions to ~/.claude/recall/), or "recall", "recall <slug>", "resume from recall", "load recall" (load mode — reads the snapshot, finds the related Obsidian session note, and presents both inline as the new session's working context). Different from claude-mem (auto observations) and the diary skill (past-tense session log) — recall is heavyweight, intentional, complete, designed for cold-start resumption.
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Recall
 
 You are the recall skill. You have two modes — **save** and **load** — determined by what the user said when invoking you.
 
-## Configuration
+## Obsidian Integration (Optional)
 
-This skill optionally integrates with an Obsidian vault for related-note discovery. To enable, replace `<VAULT_PATH>` below with the absolute path to your Obsidian vault root. If you don't use Obsidian, ignore those references — the skill works without them.
+Recall can optionally cross-reference Obsidian session notes. To use this, the skill will auto-discover your vault at runtime. If you don't use Obsidian, the skill works without it — all Obsidian steps are skipped gracefully.
+
+### Vault Discovery
+
+Do NOT assume or hardcode any vault path. If Obsidian integration is needed (finding related notes), resolve the vault path at runtime:
+
+**Check for cached config first:**
+
+```bash
+cat ~/.claude/throughline/config.md 2>/dev/null
+```
+
+If a config exists with a `vault` key, use it. If not, discover:
+
+```bash
+find ~ -maxdepth 6 -name ".obsidian" -type d 2>/dev/null
+```
+
+- **Zero results**: Obsidian not found — skip all Obsidian steps silently, leave `related-obsidian-notes` empty.
+- **One result**: Use its parent as `vault`. No confirmation needed for a save/load operation.
+- **Multiple results**: Use the first one OR check if the user has a config at `~/.claude/throughline/config.md`. If still ambiguous, skip Obsidian steps and note it in output: "Multiple vaults found — Obsidian notes skipped. Run `diary` to configure a default vault."
+
+When a vault is resolved, also read the `sessions_dir` and `projects_dir` from the config (defaults: look for a folder named like `*Sessions*` or `*Journal*`).
+
+---
 
 ## Mode detection
 
@@ -127,16 +151,16 @@ related-tickets:
 >
 ```
 
-### 3. Find related Obsidian session notes
+### 3. Find related Obsidian session notes (optional)
 
-If you use Obsidian, search the vault for session notes that relate to the current work. Look in `<VAULT_PATH>/09-Sessions/` and `<VAULT_PATH>/08-Projects/<project>/`. Match by:
+Run vault discovery (see above). If a vault is found, search for session notes that relate to the current work. Look in `<vault>/<sessions_dir>/` and `<vault>/<projects_dir>/<project>/`. Match by:
 - Project name in path
 - Recent dates (last 7 days)
 - Tags / topic overlap
 
 Include matching paths in the `related-obsidian-notes` frontmatter. Don't inline file contents — just paths. Load mode handles re-reading.
 
-If you don't use Obsidian, skip this step and leave `related-obsidian-notes` empty.
+If no vault is found or Obsidian isn't configured, leave `related-obsidian-notes` empty and continue.
 
 ### 4. Write the file(s)
 
@@ -148,7 +172,7 @@ If you don't use Obsidian, skip this step and leave `related-obsidian-notes` emp
 Report:
 - Path(s) written
 - Whether a slug was used
-- Number of related Obsidian notes found
+- Number of related Obsidian notes found (or "Obsidian not configured" if skipped)
 - Brief summary of what was captured (use the TL;DR field)
 
 ---
@@ -167,15 +191,19 @@ If the file doesn't exist, tell the user clearly and list what IS available in `
 
 Parse the frontmatter and body.
 
-### 3. Find and read the most recent related Obsidian session note
+### 3. Find and read the most recent related Obsidian session note (optional)
+
+Run vault discovery (see above). If a vault is found:
 
 Look at the `related-obsidian-notes` field in the frontmatter. Find the most recent one (by date in filename or by file mtime). Read its contents.
 
 If no `related-obsidian-notes` field, search for a recent session note matching the project tag from frontmatter:
-- Look in `<VAULT_PATH>/09-Sessions/` for files matching `YYYY-MM-DD-*<project-slug>*.md` from the last 7 days
-- Look in `<VAULT_PATH>/08-Projects/<project>/` for `Overview.md` or similar
+- Look in `<vault>/<sessions_dir>/` for files matching `YYYY-MM-DD-*<project-slug>*.md` from the last 7 days
+- Look in `<vault>/<projects_dir>/<project>/` for `Overview.md` or similar
 
 Read the most recent matching file.
+
+If no vault is found, skip this step silently.
 
 ### 4. Present the loaded context inline
 
@@ -210,6 +238,8 @@ In your response to the user, present:
 <list from recall file with brief context per file>
 ```
 
+If no Obsidian note was found or Obsidian isn't configured, omit the "Related Obsidian session note" section entirely.
+
 ### 5. Adopt the context
 
 After presenting, treat the loaded context as the working state for the rest of the session. The user's next message picks up from where the prior session left off.
@@ -233,7 +263,7 @@ Recall is intentionally different from these:
 - **claude-mem** captures fuzzy auto-observations cross-session — useful for "did we ever solve X." Don't duplicate that work; recall is for full intentional state snapshots.
 - **diary** writes past-tense session logs to Obsidian — useful for project history. Recall doesn't replace it; the two are complementary. A normal pause might use both: `recall save` + `save to diary`.
 
-When in save mode, if a `09-Sessions/YYYY-MM-DD-*.md` file exists for today, list it under `related-obsidian-notes` so the load-mode reader picks it up automatically.
+When in save mode, if a session note exists for today (in the discovered vault), list it under `related-obsidian-notes` so the load-mode reader picks it up automatically.
 
 ---
 
@@ -243,6 +273,7 @@ When in save mode, if a `09-Sessions/YYYY-MM-DD-*.md` file exists for today, lis
 - **Multiple slugs match a partial input** — list matches and ask the user to pick.
 - **Stale recall (older than 30 days)** — load it but flag the staleness at the top: "⚠️ This recall is N days old. State may have drifted."
 - **Recall references files that no longer exist** — load anyway, but note which references are dead at the bottom of the load output so the user knows.
+- **Obsidian not found** — continue without it; never error or block on missing Obsidian integration.
 
 ---
 
