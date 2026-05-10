@@ -15,68 +15,45 @@ Two complementary Claude Code skills:
 
 | Skill | Required | Notes |
 |---|---|---|
-| **diary** | [Obsidian](https://obsidian.md) vault on disk | The skill writes Markdown files into your vault folders. Without a vault, the skill has nothing to write to. |
+| **diary** | [Obsidian](https://obsidian.md) vault on disk | The skill writes Markdown files into your vault. It will auto-discover your vault on first use. |
 | **recall** | Claude Code | Obsidian is **optional** — recall stores its own snapshots in `~/.claude/recall/`. If you have an Obsidian vault, recall will also link to related session notes. |
 
-Both skills assume you are running [Claude Code](https://claude.ai/code) and that `~/.claude/skills/` is the global skill directory.
+Both skills require [Claude Code](https://claude.ai/code).
 
-### Vault folder layout (diary only)
-
-The diary skill expects two folders inside your Obsidian vault:
-
-```
-<VAULT_PATH>/
-├── 08-Projects/      # one folder per project, each with a project doc
-└── 09-Sessions/      # dated session notes (YYYY-MM-DD-<slug>.md)
-```
-
-If you use a different folder layout, edit the paths inside `diary/SKILL.md` to match.
+**No manual path configuration needed.** Both skills auto-discover your Obsidian vault at first use by scanning for `.obsidian` directories. Discovered paths are cached in `~/.claude/throughline/config.md`.
 
 ---
 
-## Install (for a human)
+## Install
 
 ```bash
-# 1. Clone this repo somewhere temporary
+# 1. Clone this repo
 git clone https://github.com/chewkaah/throughline.git /tmp/throughline
 
-# 2. Copy the two skill folders into your global Claude skills directory
+# 2. Copy the skill folders into your global Claude skills directory
 mkdir -p ~/.claude/skills
 cp -R /tmp/throughline/diary  ~/.claude/skills/
 cp -R /tmp/throughline/recall ~/.claude/skills/
 
-# 3. Edit ~/.claude/skills/diary/SKILL.md and replace every <VAULT_PATH>
-#    with the absolute path to your Obsidian vault root, e.g.
-#      /Users/yourname/Documents/Obsidian Vault
-#    or an iCloud Drive path like
-#      /Users/yourname/Library/Mobile Documents/com~apple~CloudDocs/Documents/Obsidian Vault
-#
-#    Do the same in ~/.claude/skills/recall/SKILL.md if you want recall
-#    to find related Obsidian session notes. Skip this if you don't use Obsidian.
-
-# 4. Restart Claude Code (or start a new session). Verify with:
+# 3. Restart Claude Code (or start a new session). Verify with:
 #      "list available skills"
 #    You should see `diary` and `recall` in the list.
 ```
+
+That's it. No path editing required — the skills will ask about your vault on first use if they can't find it automatically.
 
 ---
 
 ## Install (for an LLM agent)
 
-If you are a coding agent (Claude Code, etc.) installing this for a user, run these steps in order. Stop and ask the user only at the marked checkpoints.
+If you are a coding agent (Claude Code, etc.) installing this for a user, run these steps in order.
 
 ### Step 1 — Verify prerequisites
 
-1. Confirm Claude Code is running and `~/.claude/skills/` is the active global skill directory. If `~/.claude/skills/` does not exist, create it: `mkdir -p ~/.claude/skills`.
+1. Confirm Claude Code is running and `~/.claude/skills/` is the active global skill directory. If it does not exist, create it: `mkdir -p ~/.claude/skills`.
 2. Ask the user: **"Do you use Obsidian?"**
-   - If **no** → only install `recall`. The `diary` skill is non-functional without a vault. Skip to Step 4 with `INSTALL_DIARY=false`.
-   - If **yes** → ask: **"What is the absolute path to your Obsidian vault root?"** Store the answer as `VAULT_PATH`. Verify the path exists with `test -d "$VAULT_PATH" && echo OK`.
-3. If `INSTALL_DIARY=true`, verify the expected vault subfolders exist:
-   ```bash
-   test -d "$VAULT_PATH/08-Projects" && echo "projects-ok"
-   test -d "$VAULT_PATH/09-Sessions" && echo "sessions-ok"
-   ```
-   If either is missing, ask the user whether to create them (`mkdir -p "$VAULT_PATH/08-Projects" "$VAULT_PATH/09-Sessions"`) or whether they use a different layout (in which case you will need to edit the path references inside `diary/SKILL.md` to match).
+   - If **no** → only install `recall`. The `diary` skill requires a vault.
+   - If **yes** → proceed with both. The skills will discover the vault path automatically on first use.
 
 ### Step 2 — Fetch the skills
 
@@ -87,34 +64,13 @@ git clone https://github.com/chewkaah/throughline.git /tmp/throughline
 ### Step 3 — Copy into the skills directory
 
 ```bash
-# recall is always installed
 cp -R /tmp/throughline/recall ~/.claude/skills/
 
-# diary only if INSTALL_DIARY=true
+# diary only if the user uses Obsidian
 cp -R /tmp/throughline/diary ~/.claude/skills/
 ```
 
-### Step 4 — Substitute `<VAULT_PATH>` placeholders
-
-The skills ship with the literal string `<VAULT_PATH>` everywhere a vault path appears. Replace it with the user's actual path. macOS / Linux:
-
-```bash
-# diary (only if installed)
-sed -i.bak "s|<VAULT_PATH>|$VAULT_PATH|g" ~/.claude/skills/diary/SKILL.md && rm ~/.claude/skills/diary/SKILL.md.bak
-
-# recall (only if the user uses Obsidian; otherwise leave placeholders — the skill works without)
-sed -i.bak "s|<VAULT_PATH>|$VAULT_PATH|g" ~/.claude/skills/recall/SKILL.md && rm ~/.claude/skills/recall/SKILL.md.bak
-```
-
-Verify no `<VAULT_PATH>` placeholders remain in installed skills the user wanted vault-wired:
-
-```bash
-grep -n "<VAULT_PATH>" ~/.claude/skills/diary/SKILL.md  ~/.claude/skills/recall/SKILL.md 2>/dev/null
-```
-
-(Empty output = success for installed skills.)
-
-### Step 5 — Verify install
+### Step 4 — Verify install
 
 Tell the user to run `/help` or ask Claude Code "list available skills" in a new session. Both skills should appear with their descriptions:
 
@@ -123,17 +79,16 @@ Tell the user to run `/help` or ask Claude Code "list available skills" in a new
 
 If they don't appear, check that the `name:` field in each `SKILL.md` frontmatter matches the folder name (`diary` and `recall`) and that Claude Code was restarted.
 
-### Step 6 — Smoke test
+### Step 5 — Smoke test
 
 Have the user invoke each skill once:
 
-- **diary**: open a chat and say `save to diary — testing install`. The skill should write to `<VAULT_PATH>/09-Sessions/YYYY-MM-DD-<slug>.md` and report the path back.
-- **recall**: in any chat say `recall save smoke-test`. The skill should write `~/.claude/recall/latest.md` and `~/.claude/recall/smoke-test.md`. Then say `recall smoke-test` in a new session — the prior context should be reloaded.
+- **diary**: say `save to diary — testing install`. On first run, the skill will locate (or ask for) the vault, then write a session note and report the path.
+- **recall**: say `recall save smoke-test`. The skill should write `~/.claude/recall/latest.md` and `~/.claude/recall/smoke-test.md`. Then say `recall smoke-test` in a new session — the prior context should reload.
 
 If the smoke test fails, the most common issues are:
-1. `<VAULT_PATH>` placeholder not substituted (re-run Step 4).
-2. Vault folders `08-Projects/` or `09-Sessions/` don't exist (create them).
-3. Claude Code needs a restart to pick up new skills.
+1. Vault not found — the skill will ask the user for the path; provide it and the config is cached for future runs.
+2. Claude Code needs a restart to pick up new skills.
 
 ---
 
@@ -143,12 +98,12 @@ If the smoke test fails, the most common issues are:
 
 Trigger phrases: `save to diary`, `add to diary`, `save session`, `log session`.
 
-The skill decides between two routes:
+On first use, the skill discovers your Obsidian vault (via `.obsidian` directory scan) and detects your sessions and projects folders. The result is cached at `~/.claude/throughline/config.md` — delete this file to re-run discovery.
 
-- **Project route** — appends a dated `### YYYY-MM-DD — <Title>` section under `## Progress Log` in the project's doc inside `08-Projects/`. Creates the doc if it doesn't exist yet.
-- **Session route** — writes (or appends to) `09-Sessions/YYYY-MM-DD-<slug>.md` for one-off / cross-project / infra work that doesn't belong to a single named project.
+The skill routes between two modes:
 
-It picks based on whether a project doc already exists and whether the work is feature-level or infra-level. Read `diary/SKILL.md` for the full routing rules.
+- **Project route** — appends a dated `### YYYY-MM-DD — <Title>` section under `## Progress Log` in the project's doc. Creates the doc if it doesn't exist yet.
+- **Session route** — writes (or appends to) a dated session file for one-off / cross-project / infra work.
 
 ### `recall` — usage
 
@@ -163,9 +118,9 @@ Two modes, picked from the trigger phrase:
 | `recall <slug>` | load | reads `<slug>.md` and adopts it as current context |
 | `resume from recall [<slug>]` | load | same as load |
 
-A **save** distills the current session into TL;DR, where-we-are, locked decisions, open questions, files touched, and resume instructions. A **load** reads that snapshot back in a new session and presents it inline as the working context, so the next Claude can pick up cold without asking "what were we doing".
+A **save** distills the current session into TL;DR, where-we-are, locked decisions, open questions, files touched, and resume instructions. A **load** reads that snapshot back in a new session and presents it inline so the next Claude can pick up cold without asking "what were we doing."
 
-If you also use Obsidian, recall will link related session notes from `<VAULT_PATH>/09-Sessions/` so the load-mode reader can pull them in too.
+If you also use Obsidian, recall will link related session notes it finds in your vault.
 
 ### How they fit together
 
