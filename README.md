@@ -4,7 +4,7 @@
 
 Two complementary Claude Code skills:
 
-- **`diary`** — saves a past-tense session log to your Obsidian vault as either a project note or a dated session note.
+- **`diary`** — saves a past-tense work log to the right Obsidian home: canonical/infrastructure note first, project note second, dated session note only when no durable home exists.
 - **`recall`** — freezes full session context (decisions, open questions, files touched, resume instructions) so you can pause work in one session and resume it cold in another.
 
 `diary` is your project history. `recall` is your handoff brief. Together they keep the throughline of your work intact across every new context window.
@@ -74,7 +74,7 @@ cp -R /tmp/throughline/diary ~/.claude/skills/
 
 Tell the user to run `/help` or ask Claude Code "list available skills" in a new session. Both skills should appear with their descriptions:
 
-- `diary — Save or append a session log to the Obsidian daily session note...`
+- `diary — Use when the user asks to save, log, diary, recap, or persist work...`
 - `recall — Capture or restore a full session-context snapshot...`
 
 If they don't appear, check that the `name:` field in each `SKILL.md` frontmatter matches the folder name (`diary` and `recall`) and that Claude Code was restarted.
@@ -83,7 +83,7 @@ If they don't appear, check that the `name:` field in each `SKILL.md` frontmatte
 
 Have the user invoke each skill once:
 
-- **diary**: say `save to diary — testing install`. On first run, the skill will locate (or ask for) the vault, then write a session note and report the path.
+- **diary**: say `save to diary — testing install`. On first run, the skill will locate (or ask for) the vault, then route the note to the best canonical/project/session home and report the path.
 - **recall**: say `recall save smoke-test`. The skill should write `~/.claude/recall/latest.md` and `~/.claude/recall/smoke-test.md`. Then say `recall smoke-test` in a new session — the prior context should reload.
 
 If the smoke test fails, the most common issues are:
@@ -98,12 +98,13 @@ If the smoke test fails, the most common issues are:
 
 Trigger phrases: `save to diary`, `add to diary`, `save session`, `log session`.
 
-On first use, the skill discovers your Obsidian vault (via `.obsidian` directory scan) and detects your sessions and projects folders. The result is cached at `~/.claude/throughline/config.md` — delete this file to re-run discovery.
+On first use, the skill discovers your Obsidian vault (via `.obsidian` directory scan) and detects your sessions, projects, and optional infrastructure/system folders. The result is cached at `~/.claude/throughline/config.md` — delete this file to re-run discovery.
 
-The skill routes between two modes:
+The skill routes between durable homes before creating a dated session note:
 
-- **Project route** — appends a dated `### YYYY-MM-DD — <Title>` section under `## Progress Log` in the project's doc. Creates the doc if it doesn't exist yet.
-- **Session route** — writes (or appends to) a dated session file for one-off / cross-project / infra work.
+- **Canonical/infrastructure route** — updates an existing source-of-truth note, or creates a new canonical note when the topic is durable and big enough.
+- **Project route** — appends a dated `### YYYY-MM-DD — <Title>` section under `## Progress Log` in the project's doc.
+- **Session route** — writes or appends a dated session file only for one-off work with no durable canonical/project home.
 
 ### `recall` — usage
 
@@ -126,7 +127,7 @@ If you also use Obsidian, recall will link related session notes it finds in you
 
 | When you... | Use |
 |---|---|
-| Finish a chunk of project work and want a permanent log | `save to diary` |
+| Finish a chunk of project or system work and want a permanent log | `save to diary` |
 | Need to pause work mid-session and resume later | `recall save <slug>` |
 | Want to resume a paused session | `recall <slug>` |
 | Both — wrap up cleanly AND leave a handoff brief | `save to diary` then `recall save <slug>` |

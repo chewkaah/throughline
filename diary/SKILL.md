@@ -1,222 +1,237 @@
 ---
 name: diary
-description: Save or append a session log to the Obsidian daily session note. Triggers on "add to diary", "save session", "log session", or "save to diary".
+description: Use when the user asks to save, log, diary, recap, or persist work from the current session into Obsidian
 ---
 
 # Diary / Save Session Skill
 
-Save a summary of the current session to your Obsidian vault.
+Save a concise progress update to the right Obsidian home. Prefer durable canonical, infrastructure, or project docs over throwaway dated session notes.
 
 ## Vault Discovery
 
-Do NOT assume or hardcode any vault path. Every time this skill runs, resolve the vault and folder paths fresh using the steps below.
+Do NOT assume or hardcode any vault path. Resolve the vault and folder paths fresh.
 
-### Step D1 — Load or discover vault config
+### Step D1 - Load or discover vault config
 
-Check for a cached config file at `~/.claude/throughline/config.md`. If it exists, read it and extract:
+Check for `~/.claude/throughline/config.md`. If it exists, read:
+
 - `vault`: absolute path to vault root
-- `sessions_dir`: path to the sessions folder (relative to vault, or absolute)
-- `projects_dir`: path to the projects folder (relative to vault, or absolute)
+- `sessions_dir`: path to the sessions folder, relative to vault or absolute
+- `projects_dir`: path to the projects folder, relative to vault or absolute
+- `infrastructure_dir`: optional path to infrastructure/system notes, relative to vault or absolute
 
-If the config file does NOT exist (first run), discover the vault:
+If the config file does not exist, discover the vault:
 
 ```bash
 find ~ -maxdepth 6 -name ".obsidian" -type d 2>/dev/null
 ```
 
-- **Zero results**: Tell the user: "I couldn't find an Obsidian vault on your machine. What's the path to your vault root?" Use their answer as `vault`.
-- **One result**: Use its parent directory as `vault`. Confirm with the user before proceeding: "Found vault at `<path>` — is that right?"
-- **Multiple results**: List them and ask the user to pick one.
+- **Zero results**: Ask for the vault root path.
+- **One result**: Use its parent directory as `vault`; confirm before proceeding.
+- **Multiple results**: List them and ask the user to choose.
 
-Once `vault` is confirmed, discover the sessions and projects folders:
+Once `vault` is confirmed, discover likely folders:
 
 ```bash
 ls "<vault>"
 ```
 
-Look for folders that look like session logs (names containing "session", "log", "journal", or numbered prefixes like `09-`). If none are obvious, ask the user: "Where do you keep session notes within your vault? (e.g. `09-Sessions` or `Journal`)"
+Look for:
 
-Do the same for a projects folder (names containing "project", "client", or numbered prefixes like `08-`). If none are obvious, ask: "Where do you keep project notes? (e.g. `08-Projects` or `Projects`)"
+- sessions: names containing `session`, `log`, `journal`, or numbered prefixes like `09-`
+- projects: names containing `project`, `client`, or numbered prefixes like `08-`
+- infrastructure: names containing `infrastructure`, `system`, `ops`, `admin`, or numbered prefixes like `03-`
 
-Save the config for future runs:
-
-```bash
-mkdir -p ~/.claude/throughline
-```
-
-Write `~/.claude/throughline/config.md`:
+If a folder is not obvious, ask. Save config:
 
 ```markdown
 ---
 vault: /absolute/path/to/vault
-sessions_dir: Sessions
-projects_dir: Projects
+sessions_dir: 09-Sessions
+projects_dir: 08-Projects
+infrastructure_dir: 03-Infrastructure
 ---
 ```
 
----
+If the user has no infrastructure folder, leave `infrastructure_dir` blank and use the projects folder for durable non-session docs.
 
-## Instructions
+## Step 1 - Determine Date
 
-### Step 1 — Determine Today's Date
+Use the current date from context if available. Otherwise run `date +%Y-%m-%d`.
 
-Use the current date (from system-reminder context if available, otherwise `date +%Y-%m-%d`).
+## Step 2 - Synthesize Content
 
-### Step 2 — Gather Session Content
+Capture only what helps future work:
 
-If the user provided a description or title, use it. Otherwise, synthesise from the conversation:
-- What was worked on
-- Key decisions made
-- Files created or changed
-- Problems solved
-- Any pending items
+- what was worked on
+- key decisions
+- files created or changed
+- problems solved
+- pending items and next action
 
-### Step 3 — Route: Project Doc or Session Note?
+## Step 3 - Route To The Durable Home First
 
-**Ask: is this work primarily on a named project?**
-
-A named project = a client, product, or codebase that has (or should have) a persistent reference document in the projects folder — e.g. a specific client, product, or recurring initiative.
-
-```
-Is this work on a named project?
-├── YES → go to Step 4A (Project Doc route)
-└── NO  → go to Step 4B (Session Note route)
-```
-
-**Project signals:**
-- Work touches a specific client or product codebase
-- Changes are feature/fix-level (not infrastructure or tooling)
-- There's already a project folder in the projects dir
-- The user says "update the [project] docs/notes"
-
-**Session signals:**
-- Infrastructure, agent setup, tooling, dev environment
-- Cross-project or meta work
-- No specific persistent project to attach it to
-
----
-
-### Step 4A — Project Doc Route
-
-**Find or create the project document:**
+Do not default to the sessions folder. Search existing durable homes first.
 
 ```bash
-find "<vault>/<projects_dir>/" -name "*.md" | xargs grep -l "[project-name]" 2>/dev/null
+find "<vault>/<infrastructure_dir>" "<vault>/<projects_dir>" -name "*.md" 2>/dev/null | rg -i "topic|project|system|agent|repo|client"
 ```
 
-- **If a project doc exists** → append a dated progress section to it (see format below)
-- **If no project doc exists** → create one at `<vault>/<projects_dir>/[Client-or-Org]/[Project-Name]/[Project-Name].md`
+Routing priority:
 
-**Appending to an existing project doc — add under a `## Progress Log` heading:**
+1. **Existing canonical doc**: append/update the relevant section there.
+2. **Existing project doc**: append under `## Progress Log`.
+3. **Existing infrastructure/system section**: create/update a note there for cross-system automation, agents, skills, env vars, MCPs, permissions, infrastructure, or tooling.
+4. **New canonical doc**: create only when the topic is durable and big enough.
+5. **Session note**: create only when no durable home exists.
+
+## Canonical Doc Threshold
+
+Create a new canonical doc when at least two are true:
+
+- the topic spans multiple repos, tools, agents, clients, or systems
+- future sessions will need a stable entry point
+- it defines architecture, operating policy, recurring workflow, or a source of truth
+- it has multiple child notes, tickets, or deliverables to index
+- the user asks for "canonical", "source of truth", "operating doc", "index", "system", or "automation"
+
+Good filing rules:
+
+- cross-system tooling/agents/automation -> infrastructure/system folder
+- product/client/codebase work -> projects folder
+- one-off recap/history only -> sessions folder
+
+## Step 4A - Append To Existing Canonical Or Infrastructure Doc
+
+If a relevant doc exists, do not create a new session note. Add a dated section under the most relevant heading.
+
+Preferred headings:
+
+- `## Progress Log`
+- `## Audit Log`
+- `## Decisions`
+- `## Open Items`
+- `## Next Build Order`
+- `## Filing Notes`
+
+Format:
 
 ```markdown
-## Progress Log
-
-### YYYY-MM-DD — [Short Title]
-- [bullet: what changed]
-- [bullet: decisions made]
-- [bullet: files changed]
+### YYYY-MM-DD - [Short Title]
+- [what changed]
+- [decision made]
+- [next action]
 ```
 
-If `## Progress Log` doesn't exist yet, add it at the bottom of the file.
+If no suitable heading exists, add `## Progress Log` at the bottom.
 
-**Creating a new project doc** — use this structure:
+## Step 4B - Append To Existing Project Doc
+
+Find the project doc under the projects folder. Append under `## Progress Log`:
+
+```markdown
+### YYYY-MM-DD - [Short Title]
+- [what changed]
+- [decision made]
+- [files changed]
+```
+
+If no `## Progress Log` exists, add it at the bottom.
+
+## Step 4C - Create New Canonical Doc
+
+Use this only when the canonical threshold is met.
 
 ```markdown
 ---
 tags:
-  - project
-  - [relevant-tags]
+  - canonical
+  - [topic-tags]
 created: 'YYYY-MM-DD'
+updated: 'YYYY-MM-DD'
+status: active
 ---
-# [Project Name]
+# [Topic]
 
 ## Overview
-[1–2 sentences]
+[1-3 sentences]
 
-## Status
-**[Status]** — [brief note]
+## Current State
+- [facts]
 
-## Repos & Hosting
-| Resource | Details |
-|---|---|
+## Decisions
+- [locked decisions]
 
-## Tech Stack
-| Layer | Detail |
-|---|---|
+## Open Items
+- [pending work]
+
+## Related Notes
+- [[note]]
 
 ## Progress Log
 
-### YYYY-MM-DD — [Short Title]
-- [bullet points]
+### YYYY-MM-DD - [Short Title]
+- [summary]
 ```
 
----
+## Step 4D - Create Or Append Session Note
 
-### Step 4B — Session Note Route
+Only use the sessions folder when the work is ephemeral or no durable home exists.
 
-**Check if a session note already exists for today:**
+Check for a same-day same-topic note:
 
 ```bash
-ls "<vault>/<sessions_dir>/" | grep "$(date +%Y-%m-%d)"
+ls "<vault>/<sessions_dir>/" | grep "YYYY-MM-DD"
 ```
 
-- **If a file exists for today with the same topic slug** → append a new numbered section to it
-- **If no file exists for today** → create a new one
-- **If files exist for today but cover a different topic** → create a new file with a unique slug
-
-**Slug:** Generate a short kebab-case slug from the main topic (2–5 words). Examples:
-- `client-feature-sync`
-- `product-stripe-setup`
-
-**New session file format:**
+Append if a matching topic note exists. Otherwise create:
 
 ```markdown
 ---
 tags:
   - session
-  - [relevant-tags]
+  - [topic-tags]
 created: 'YYYY-MM-DD'
 ---
 # YYYY-MM-DD -- [Session Title]
 
 ## Summary
-
-[1–3 sentence overview of the session.]
+[1-3 sentences]
 
 ## What Happened
 
 ### 1. [Topic]
-- [bullet points]
-
-### 2. [Topic]
-- [bullet points]
+- [bullets]
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `path/to/file` | Description |
+| `path` | Description |
 ```
 
-**Appending:** Add a new `### N. [Topic]` section under `## What Happened`, update `## Files Changed`. Never duplicate existing content.
+## Filing Audit Before Writing
 
----
+Before writing, state the route in one sentence:
 
-### Step 5 — Confirm
+`Filing route: [existing canonical | existing project | infrastructure canonical | new session] because [reason].`
 
-After writing, tell the user:
-- The file path created or updated
-- The section title(s) added
-- Whether it was a new file or an append
-- Whether it went to a project doc or a session note
+If you create a session note for a topic that has a canonical or project doc, that is a filing bug.
+
+## Confirm
+
+After writing, report:
+
+- file path created or updated
+- section added
+- whether this was canonical/project/infrastructure/session
+- any notes moved or relinked
 
 ## Rules
 
-- Always resolve vault paths via Step D1 — never assume or hardcode a path
-- Session file naming: `YYYY-MM-DD-[slug].md`
-- Keep bullets concise — this is a log, not a report
-- Tags should be lowercase, relevant to the work done
-- If the user provides a specific title or description, use it verbatim
-- Never overwrite existing sections — only append
-- When in doubt between routes, prefer the project doc route if a project doc already exists
+- Always resolve vault paths via Step D1.
+- Never hardcode a user-specific vault path.
+- Keep bullets concise; this is a log, not a report.
+- Tags should be lowercase and relevant.
+- If the user provides a specific title or description, use it verbatim.
+- Never overwrite existing sections; only append.
